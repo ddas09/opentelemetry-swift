@@ -43,6 +43,12 @@ class SessionDelegate: NSObject, URLSessionDataDelegate, URLSessionTaskDelegate 
     callCount += 1
     print("delegate called")
   }
+    
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        // Uncomment to test with non completion-handler based URLSession API
+        // semaphore.signal()
+        print("didRecieve:data - delegate called")
+    }
 }
 
 let delegate = SessionDelegate()
@@ -88,6 +94,31 @@ func simpleNetworkCallWithDelegate() {
   delegate.semaphore.wait()
 }
 
+func simpleNetworkCallWithDelegateAndCompletionHandler() {
+    let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+
+    let url = URL(string: "http://httpbin.org/get")!
+    let request = URLRequest(url: url)
+    
+    // Uncomment to test with non completion-handler based URLSession API
+    // let task = session.dataTask(with: request)
+    // task.resume()
+    
+    let task = session.dataTask(with: request) { data, response, error in
+        if let data {
+            let string = String(data: data, encoding: .utf8)
+            print("Response:\n\(string ?? "nil")")
+        } else if let error {
+            print("Error: \(error)")
+        }
+
+        delegate.semaphore.signal()
+    }
+
+    task.resume()
+    delegate.semaphore.wait()
+}
+
 @available(macOS 10.15, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
 func asyncNetworkCallWithTaskDelegate() async {
     let session = URLSession(configuration: .default)
@@ -129,21 +160,22 @@ OpenTelemetry.registerTracerProvider(tracerProvider:
 
 let networkInstrumentation = URLSessionInstrumentation(configuration: URLSessionInstrumentationConfiguration())
 
-print("making simple call")
-var callCount = delegate.callCount
-simpleNetworkCallWithDelegate()
-assert(delegate.callCount == callCount + 1)
-
-if #available(macOS 10.15, iOS 15.0, watchOS 8.0, tvOS 15.0, *) {
-    print("making simple call with task delegate")
-    callCount = delegate.callCount
-    await asyncNetworkCallWithTaskDelegate()
-    assert(delegate.callCount == callCount + 1, "async task delegate not called")
-
-    print("making simple call with session delegate")
-    callCount = delegate.callCount
-    await asyncNetworkCallWithSessionDelegate()
-    assert(delegate.callCount == callCount + 1, "async session delegate not called")
-}
+//print("making simple call")
+//var callCount = delegate.callCount
+//simpleNetworkCallWithDelegate()
+//assert(delegate.callCount == callCount + 1)
+//
+//if #available(macOS 10.15, iOS 15.0, watchOS 8.0, tvOS 15.0, *) {
+//    print("making simple call with task delegate")
+//    callCount = delegate.callCount
+//    await asyncNetworkCallWithTaskDelegate()
+//    assert(delegate.callCount == callCount + 1, "async task delegate not called")
+//
+//    print("making simple call with session delegate")
+//    callCount = delegate.callCount
+//    await asyncNetworkCallWithSessionDelegate()
+//    assert(delegate.callCount == callCount + 1, "async session delegate not called")
+//}
+simpleNetworkCallWithDelegateAndCompletionHandler()
 
 sleep(1)
